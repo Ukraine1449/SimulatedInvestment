@@ -122,6 +122,10 @@ def buy_stock(ticker, shares):
     trade.validate()
     trade.execute()
 
+def getPrice(data):
+    return data.get('c', None)
+
+
 stockList = ["MSFT", "AAPL","NVDA", "GOOGL"]
 portfolio_dict = {}
 for i in stockList:
@@ -130,13 +134,13 @@ for position in p.stock_portfolio:
     portfolio_dict[position.symbol] = position.quantity
 prices = {}
 for i in stockList:
-    prices[i] = finnhub_client.quote(i)
+    prices[i] = getPrice(finnhub_client.quote(i))
 while True:
     print("restarting")
     time.sleep(30)
     current_prices = {}
     for i in stockList:
-        current_prices[i] = finnhub_client.quote(i)
+        current_prices[i] = getPrice(finnhub_client.quote(i))
     print("updated stock values")
     for i in stockList:
         if portfolio_dict[i] >0:
