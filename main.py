@@ -1,11 +1,13 @@
 import random
 import time
+import sqlite3
 
 from investopedia_api import InvestopediaApi, StockTrade, OptionTrade, Expiration, OrderLimit, TransactionType, \
     OptionScope, OptionChain
 import json
 from datetime import datetime, timedelta
 import finnhub
+
 finnhub_client = finnhub.Client(api_key="colr5kpr01qqra7g7oagcolr5kpr01qqra7g7ob0")
 credentials = {}
 with open('credentials.json') as ifh:
@@ -92,10 +94,12 @@ for position in p.option_portfolio:
     print("\t------------------------------")
     print("-------------------------------------------------")
 
+
 def sell_stock(ticker, shares):
     from investopedia_api import StockTrade, TransactionType, OrderLimit, Expiration
     client.portfolio.refresh()
-    stock_position = next((position for position in client.portfolio.stock_portfolio if position.symbol == ticker), None)
+    stock_position = next((position for position in client.portfolio.stock_portfolio if position.symbol == ticker),
+                          None)
 
     if stock_position is not None:
         shares_to_sell = min(shares, stock_position.quantity)
@@ -110,6 +114,47 @@ def sell_stock(ticker, shares):
     else:
         print("No shares of {} found in the portfolio.".format(ticker))
 
+
+def read_database_to_dict():
+    conn = sqlite3.connect('stocks.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT ticker, price FROM stocks')
+    data = {ticker: price for ticker, price in cursor.fetchall()}
+    conn.close()
+    return data
+
+
+def update_database_from_dict(update_dict):
+    conn = sqlite3.connect('stocks.db')
+    cursor = conn.cursor()
+    for ticker, price in update_dict.items():
+        cursor.execute('UPDATE stocks SET price = ? WHERE ticker = ?', (price, ticker))
+    conn.commit()
+    conn.close()
+
+
+def add_to_database_from_dict(new_data_dict):
+    conn = sqlite3.connect('stocks.db')
+    cursor = conn.cursor()
+    for ticker, price in new_data_dict.items():
+        cursor.execute('INSERT OR IGNORE INTO stocks (ticker, price) VALUES (?, ?)', (ticker, price))
+    conn.commit()
+    conn.close()
+
+
+def create_database():
+    conn = sqlite3.connect('stocks.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS stocks (
+            ticker TEXT PRIMARY KEY,
+            price REAL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+
 def buy_stock(ticker, shares):
     from investopedia_api import StockTrade, TransactionType, OrderLimit, Expiration
 
@@ -122,32 +167,53 @@ def buy_stock(ticker, shares):
     trade.validate()
     trade.execute()
 
+
 def getPrice(data):
     return data.get('c', None)
 
 
-stockList = ["MSFT", "AAPL","NVDA", "GOOGL"]
+def constantRun():
+    while True:
+        print("restarting")
+        time.sleep(30)
+        current_prices = {}
+        for i in stockList:
+            current_prices[i] = getPrice(finnhub_client.quote(i))
+        print("updated stock values")
+        for i in stockList:
+            if portfolio_dict[i] > 0:
+                if prices[i] - current_prices[i] >= 2:
+                    sell_stock(i, i)
+                    print("Selling stocks")
+            else:
+                if current_prices[i] < prices[i]:
+                    buy_stock(i, random.randint(1, 10))
+                    print("Buying stocks")
+
+
+def onetimeRun():
+    oldPrices = read_database_to_dict()
+    currentPrices = {}
+    for i in stockList:
+        currentPrices[i] = getPrice(finnhub_client.quote(i))
+    for i in stockList:
+        if prices[i] - currentPrices[i] >= 2:
+            sell_stock(i, i)
+            print("Selling stocks")
+        else:
+            buy_stock(i, random.randint(1, 10))
+            print("Buying stocks")
+
+
+stockList = ["MSFT", "AAPL", "NVDA", "GOOGL"]
 portfolio_dict = {}
 for i in stockList:
-    portfolio_dict[i]=0
+    portfolio_dict[i] = 0
 for position in p.stock_portfolio:
     portfolio_dict[position.symbol] = position.quantity
 prices = {}
 for i in stockList:
     prices[i] = getPrice(finnhub_client.quote(i))
-while True:
-    print("restarting")
-    time.sleep(30)
-    current_prices = {}
-    for i in stockList:
-        current_prices[i] = getPrice(finnhub_client.quote(i))
-    print("updated stock values")
-    for i in stockList:
-        if portfolio_dict[i] >0:
-            if prices[i] - current_prices[i] >=2:
-                sell_stock(i, stockList[i])
-                print("Selling stocks")
-        else:
-             if current_prices[i] < prices[i]:
-                 buy_stock(i, random.randint(1,10))
-                 print("Buying stocks")
+
+#constantRun()
+onetimeRun()
