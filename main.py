@@ -1,6 +1,7 @@
 import random
 import time
 import sqlite3
+import wsj_scrape
 
 from investopedia_api import InvestopediaApi, StockTrade, OptionTrade, Expiration, OrderLimit, TransactionType, \
     OptionScope, OptionChain
@@ -172,39 +173,6 @@ def getPrice(data):
     return data.get('c', None)
 
 
-def constantRun():
-    while True:
-        print("restarting")
-        time.sleep(30)
-        current_prices = {}
-        for i in stockList:
-            current_prices[i] = getPrice(finnhub_client.quote(i))
-        print("updated stock values")
-        for i in stockList:
-            if portfolio_dict[i] > 0:
-                if prices[i] - current_prices[i] >= 2:
-                    sell_stock(i, i)
-                    print("Selling stocks")
-            else:
-                if current_prices[i] < prices[i]:
-                    buy_stock(i, random.randint(1, 10))
-                    print("Buying stocks")
-
-
-def onetimeRun():
-    oldPrices = read_database_to_dict()
-    currentPrices = {}
-    for i in stockList:
-        currentPrices[i] = getPrice(finnhub_client.quote(i))
-    for i in stockList:
-        if prices[i] - currentPrices[i] >= 2:
-            sell_stock(i, i)
-            print("Selling stocks")
-        else:
-            buy_stock(i, random.randint(1, 10))
-            print("Buying stocks")
-
-
 stockList = ["MSFT", "AAPL", "NVDA", "GOOGL"]
 portfolio_dict = {}
 for i in stockList:
@@ -214,6 +182,25 @@ for position in p.stock_portfolio:
 prices = {}
 for i in stockList:
     prices[i] = getPrice(finnhub_client.quote(i))
+stock_recs = wsj_scrape.estimate(stockList)
+print(stock_recs)
+
+def constantRun():
+    while True:
+        print("restarting")
+        time.sleep(30)
+        current_prices = {}
+        for i in stockList:
+            current_prices[i] = getPrice(finnhub_client.quote(i))
+        print("updated stock values")
+        for i in stockList:
+            if portfolio_dict.get(i) > 0:
+                if stock_recs.get(i)[0] - stock_recs.get(i)[1] > 5 & portfolio_dict.get(i) < 15:
+                    buy_stock(i, 15 - portfolio_dict.get(i))
+                elif stock_recs.get(i)[0] < 5:
+                    sell_stock(i, portfolio_dict.get(i))
+            else:
+                if stock_recs.get(i)[0] - stock_recs.get(i)[1] > 5:
+                    buy_stock(i, 15 - portfolio_dict.get(i))
 
 #constantRun()
-onetimeRun()
